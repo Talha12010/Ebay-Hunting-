@@ -1,5 +1,7 @@
 // Shared helpers used by the popup and the background service worker.
 
+export const PRODUCT_LIMIT = 10000;
+
 export const DEFAULT_SETTINGS = {
   minRating: 4.5,
   minPrice: 0,
@@ -30,13 +32,25 @@ export const KNOWN_BRANDS = [
 
 const UNBRAND_WORDS = ['unbranded', 'no brand', 'nobrand', 'generic'];
 
+let brandPatternCache = { key: null, pattern: null };
+
+function brandPattern(settings) {
+  const key = String(settings.brandBlacklist || '');
+  if (brandPatternCache.key !== key) {
+    const extra = key
+      .split(',').map(name => name.trim()).filter(Boolean)
+      .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    brandPatternCache = {
+      key,
+      pattern: new RegExp(`\\b(${[...KNOWN_BRANDS, ...extra].join('|')})\\b`, 'i'),
+    };
+  }
+  return brandPatternCache.pattern;
+}
+
 export function isLikelyBranded(product, settings) {
   if (!settings || settings.brandFilter === false) return false;
-  const extra = String(settings.brandBlacklist || '')
-    .split(',').map(name => name.trim()).filter(Boolean)
-    .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const names = [...KNOWN_BRANDS, ...extra];
-  const pattern = new RegExp(`\\b(${names.join('|')})\\b`, 'i');
+  const pattern = brandPattern(settings);
   return pattern.test(product.title) ||
     pattern.test(product.subtitle || '') ||
     pattern.test(product.brandText || '');

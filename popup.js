@@ -1,5 +1,5 @@
 import {
-  DEFAULT_SETTINGS, randomKeywords, isWinnerProduct, winnerFailures, estimateProfit, isLikelyBranded, competitionLevel, scoreProduct, toCsv, toExcelXml, triggerDownload,
+  DEFAULT_SETTINGS, PRODUCT_LIMIT, randomKeywords, isWinnerProduct, winnerFailures, estimateProfit, isLikelyBranded, competitionLevel, scoreProduct, toCsv, toExcelXml, triggerDownload,
 } from './lib.js';
 
 const $ = id => document.getElementById(id);
@@ -8,12 +8,37 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&'
 let products = [];
 let saved = [];
 let settings = { ...DEFAULT_SETTINGS };
+let scoreCache = new WeakMap();
+let profitCache = new WeakMap();
+let winnerCache = new WeakMap();
+
+function clearAnalysisCache() {
+  scoreCache = new WeakMap();
+  profitCache = new WeakMap();
+  winnerCache = new WeakMap();
+}
+
+function scoreOf(product) {
+  if (!scoreCache.has(product)) scoreCache.set(product, scoreProduct(product));
+  return scoreCache.get(product);
+}
+
+function profitOf(product) {
+  if (!profitCache.has(product)) profitCache.set(product, estimateProfit(product, settings));
+  return profitCache.get(product);
+}
+
+function isWinner(product) {
+  if (!winnerCache.has(product)) winnerCache.set(product, isWinnerProduct(product, settings));
+  return winnerCache.get(product);
+}
 
 // ---------- storage ----------
 async function load() {
   const data = await chrome.storage.local.get({ products: [], saved: [], history: [], settings: DEFAULT_SETTINGS });
   saved = data.saved;
   settings = { ...DEFAULT_SETTINGS, ...data.settings };
+  clearAnalysisCache();
   const scanState = await readState();
   if (scanState.running) {
     await setState({ running: false, paused: false, stopped: false, message: 'Previous scan was interrupted (dashboard tab was closed or reloaded).' });
@@ -22,7 +47,7 @@ async function load() {
   // to History, then clear the home stats.
   if (data.products.length) {
     if (!scanState.sessionArchived) {
-      const winners = data.products.filter(product => isWinnerProduct(product, settings)).length;
+      const winners = data.products.filter(isWinner).length;
       const session = { at: new Date().toISOString(), session: true, scanned: data.products.length, winners, pages: scanState.step || 0, reason: 'stopped' };
       await chrome.storage.local.set({ history: [session, ...data.history].slice(0, 200) });
     }
@@ -34,47 +59,42 @@ async function load() {
   $('maxPrice').value = settings.maxPrice || '';
   $('pagesSelect').value = String(settings.maxPages || 3);
   render();
+  renderSaved();
 }
 
 // ---------- helpers ----------
-function matchingFilter(product) {
-  const min = Number($('minRatingFilter').value) || 0;
-  const minPrice = Number($('minPrice').value) || 0;
-  const maxPrice = Number($('maxPrice').value) || Infinity;
-  const hasRating = product.rating && product.rating >= min;
-  const brandFree = !product.branded;
-  return hasRating && brandFree && product.price >= minPrice && product.price <= maxPrice;
-}
-
 function currentList() {
   const query = $('search').value.toLowerCase();
   const scope = $('scopeSelect').value;
+  const minRating = Number($('minRatingFilter').value) || 0;
+  const minPrice = Number($('minPrice').value) || 0;
+  const maxPrice = Number($('maxPrice').value) || Infinity;
+  const matches = product => {
+    if (scope === 'winners') return isWinner(product);
+    if (scope === 'unbranded') return !product.branded;
+    if (scope === 'all') return true;
+    return !!product.rating && product.rating >= minRating && !product.branded &&
+      product.price >= minPrice && product.price <= maxPrice;
+  };
   return products
-    .filter(p => !query || p.title.toLowerCase().includes(query))
-    .filter(p => {
-      if (scope === 'winners') return isWinnerProduct(p, settings);
-      if (scope === 'unbranded') return !p.branded;
-      if (scope === 'all') return true;
-      return matchingFilter(p);
-    })
+    .filter(product => (!query || product.title.toLowerCase().includes(query)) && matches(product))
     .sort(comparator());
 }
 
 function comparator() {
   const key = $('sort').value;
-  const scoreOf = p => scoreProduct(p).score;
-  const profitOf = p => estimateProfit(p, settings)?.profit ?? -Infinity;
-  const marginOf = p => estimateProfit(p, settings)?.margin ?? -Infinity;
+  const profitKey = p => profitOf(p)?.profit ?? -Infinity;
+  const marginKey = p => profitOf(p)?.margin ?? -Infinity;
   return (a, b) => {
     switch (key) {
       case 'rating': return (b.rating ?? 0) - (a.rating ?? 0);
       case 'price': return a.price - b.price;
-      case 'profit': return profitOf(b) - profitOf(a);
-      case 'margin': return marginOf(b) - marginOf(a);
+      case 'profit': return profitKey(b) - profitKey(a);
+      case 'margin': return marginKey(b) - marginKey(a);
       case 'reviews': return (b.reviews ?? 0) - (a.reviews ?? 0);
       case 'sold': return (b.soldCount ?? 0) - (a.soldCount ?? 0);
-      case 'unread': return Number(a.branded) - Number(b.branded) || scoreOf(b) - scoreOf(a);
-      default: return scoreOf(b) - scoreOf(a);
+      case 'unread': return Number(a.branded) - Number(b.branded) || scoreOf(b).score - scoreOf(a).score;
+      default: return scoreOf(b).score - scoreOf(a).score;
     }
   };
 }
@@ -83,25 +103,34 @@ function comparator() {
 function renderStats() {
   const rated = products.filter(p => p.rating);
   const unbranded = products.filter(p => !p.branded);
-  const winners = products.filter(p => isWinnerProduct(p, settings));
+  const winners = products.filter(isWinner);
   const avgRating = rated.length ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : '—';
-  const withProfit = winners.map(p => estimateProfit(p, settings)).filter(Boolean);
+  const withProfit = winners.map(profitOf).filter(Boolean);
   const avgProfit = withProfit.length ? (withProfit.reduce((s, e) => s + e.profit, 0) / withProfit.length).toFixed(2) : '—';
   const avgProfitText = avgProfit === '—' ? '—' : `£${avgProfit}`;
-  const best = [...winners].sort((a, b) => scoreProduct(b).score - scoreProduct(a).score)[0];
+  let best = null;
+  let bestScore = -1;
+  for (const product of winners) {
+    const score = scoreOf(product).score;
+    if (score > bestScore) { bestScore = score; best = product; }
+  }
   $('stats').innerHTML = `
     <div><b>${products.length}</b><span>Scanned</span></div>
     <div><b>${winners.length}</b><span>Winners</span></div>
     <div><b>${unbranded.length}</b><span>Unbranded</span></div>
     <div><b>${rated.length ? avgRating + '★' : '—'}</b><span>Avg rating</span></div>
-    <div><b title="${escapeHtml(best?.title || '')}">${best ? scoreProduct(best).score : '—'}</b><span>Best winner</span></div>
+    <div><b title="${escapeHtml(best?.title || '')}">${best ? bestScore : '—'}</b><span>Best winner</span></div>
     <div><b>${avgProfitText}</b><span>Avg est. profit</span></div>`;
 
   const pct = n => products.length ? `${Math.round((n / products.length) * 100)}%` : '—';
   const withReviews = products.filter(p => p.reviews != null).length;
   const withSold = products.filter(p => p.soldCount != null).length;
   const withWatchers = products.filter(p => p.watchersCount != null).length;
-  const topScore = products.length ? Math.max(...products.map(p => scoreProduct(p).score)) : 0;
+  let topScore = 0;
+  for (const product of products) {
+    const score = scoreOf(product).score;
+    if (score > topScore) topScore = score;
+  }
   $('coverage').textContent = products.length
     ? `Data captured — rating: ${rated.length} (${pct(rated.length)}) · reviews: ${withReviews} (${pct(withReviews)}) · sold: ${withSold} (${pct(withSold)}) · watchers: ${withWatchers} (${pct(withWatchers)}) · best score: ${topScore}`
     : '';
@@ -109,8 +138,8 @@ function renderStats() {
 
 // ---------- product cards ----------
 function cardHtml(product) {
-  const { score: itemScore, breakdown } = scoreProduct(product);
-  const profit = estimateProfit(product, settings);
+  const { score: itemScore, breakdown } = scoreOf(product);
+  const profit = profitOf(product);
   const competition = competitionLevel(product);
   const inSaved = saved.some(item => item.id === product.id);
   const brandState = product.brandText
@@ -118,7 +147,7 @@ function cardHtml(product) {
     : `<span class="badge ${product.branded ? 'bad' : 'good'}">${product.branded ? 'Brand signal in title' : 'Likely unbranded'}</span>`;
   const ring = itemScore >= 70 ? '#34d399' : itemScore >= 45 ? '#fbbf24' : '#f87171';
   const thumb = product.image
-    ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy">`
+    ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" decoding="async">`
     : `<div class="thumb-fallback" aria-hidden="true">${escapeHtml((product.title || '?').trim().charAt(0).toUpperCase() || '?')}</div>`;
   return `
   <article class="product" data-id="${escapeHtml(product.id)}">
@@ -151,6 +180,7 @@ function cardHtml(product) {
 
 function detailsHtml(product, breakdown) {
   const fails = winnerFailures(product, settings);
+  const competition = competitionLevel(product);
   const rows = [
     ['Winner check', fails.length ? `No — ${fails.join('; ')}` : 'Yes'],
     ['URL', `<a href="${escapeHtml(product.url)}" target="_blank">${escapeHtml(product.url)}</a>`],
@@ -159,7 +189,7 @@ function detailsHtml(product, breakdown) {
     ['Reviews', product.reviews ?? 'Not shown'],
     ['Sold', product.soldText || 'Not shown'],
     ['Watchers', product.watchersText || 'Not shown'],
-    ['Competition (heuristic)', `${competitionLevel(product).level} — ${competitionLevel(product).note}`],
+    ['Competition (heuristic)', `${competition.level} — ${competition.note}`],
     ['Seller', product.seller || 'Not shown'],
     ['Seller feedback', product.feedbackPercent ? `${product.feedbackPercent}% positive` : 'Not shown'],
     ['Shipping', product.shipping || 'Not shown'],
@@ -180,8 +210,13 @@ function renderCards() {
   if (!list.length) {
     const scope = $('scopeSelect').value;
     if (scope === 'winners') {
-      const top = [...products].sort((a, b) => scoreProduct(b).score - scoreProduct(a).score)[0];
-      const why = top ? ` Closest candidate: score ${scoreProduct(top).score}/100 — missing: ${winnerFailures(top, settings).join('; ')}.` : '';
+      let top = null;
+      let topScore = -1;
+      for (const product of products) {
+        const score = scoreOf(product).score;
+        if (score > topScore) { topScore = score; top = product; }
+      }
+      const why = top ? ` Closest candidate: score ${topScore}/100 — missing: ${winnerFailures(top, settings).join('; ')}.` : '';
       $('products').innerHTML = `<div class="empty">No winners found yet. A winner needs: unbranded, £3-£100 price, positive estimated profit, and either 4.3★+ with a score of 55+, or — when no rating is shown — strong demand (100+ sold or 50+ reviews); plus at least 30 combined interest signals.${why}</div>`;
     } else {
       $('products').innerHTML = '<div class="empty">No products match. Start a hunt or relax the filters.</div>';
@@ -199,14 +234,12 @@ function renderCards() {
 function render() {
   renderStats();
   renderCards();
-  renderSaved();
 }
 
 // ---------- scan ----------
 // The scan engine runs in THIS page (not the service worker), because Chrome
 // terminates the MV3 background worker after ~5 minutes, which killed long scans
 // and left the controls stuck. Keep this tab open while a scan runs.
-const MAX_PRODUCTS = 50000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let scanTabId = null;
 
@@ -269,24 +302,34 @@ async function ensureTabAlive() {
   }
 }
 
+async function closeScanTab() {
+  if (!scanTabId) return;
+  const tabId = scanTabId;
+  scanTabId = null;
+  try { await chrome.tabs.remove(tabId); } catch { /* tab already gone */ }
+}
+
 async function mergeProducts(newProducts) {
   const data = await chrome.storage.local.get({ products: [] });
   const map = new Map(data.products.map(product => [product.id, product]));
   let added = 0;
+  let changed = false;
   for (const product of newProducts) {
     const existing = map.get(product.id);
     if (existing) {
-      existing.lastSeen = new Date().toISOString();
       for (const key of ['rating', 'reviews', 'soldCount', 'watchersCount', 'shipping', 'location', 'soldText', 'watchersText']) {
-        if (existing[key] == null && product[key] != null) existing[key] = product[key];
+        if (existing[key] == null && product[key] != null) {
+          existing[key] = product[key];
+          changed = true;
+        }
       }
       continue;
     }
     map.set(product.id, { ...product });
     added += 1;
   }
-  const merged = [...map.values()].slice(-MAX_PRODUCTS);
-  await chrome.storage.local.set({ products: merged });
+  const merged = [...map.values()].slice(-PRODUCT_LIMIT);
+  if (added || changed) await chrome.storage.local.set({ products: merged });
   return { added, total: merged.length, merged };
 }
 
@@ -404,10 +447,6 @@ async function runScan(pagesPerKeyword) {
           message: `Winners ${winners}/${TARGET_WINNERS} · ${added} new from "${keyword}" page ${page} (${pagesScanned} pages scanned)`,
         });
 
-        const data = await chrome.storage.local.get({ products: [] });
-        products = data.products;
-        render();
-
         if (winners >= TARGET_WINNERS) return finishScan('target', pagesScanned, winners, historyItems);
         if (pagesScanned >= SAFETY_MAX_PAGES) return finishScan('cap', pagesScanned, winners, historyItems);
       }
@@ -415,6 +454,8 @@ async function runScan(pagesPerKeyword) {
     return finishScan('cap', pagesScanned, winners, historyItems);
   } catch (error) {
     await setState({ running: false, paused: false, stopped: false, finishedAt: new Date().toISOString(), message: `Scan error: ${error.message}` });
+  } finally {
+    await closeScanTab();
   }
 }
 
@@ -442,10 +483,12 @@ async function startScan() {
   // then clear the product list so Scanned/Winners counters reset automatically.
   const data = await chrome.storage.local.get({ products: [], history: [], settings: DEFAULT_SETTINGS });
   settings = { ...DEFAULT_SETTINGS, ...data.settings };
+  clearAnalysisCache();
   const state = await readState();
+  if (state.running) return;
   if (data.products.length) {
     if (!state.sessionArchived) {
-      const winners = data.products.filter(product => isWinnerProduct(product, settings)).length;
+      const winners = data.products.filter(isWinner).length;
       const session = { at: new Date().toISOString(), session: true, scanned: data.products.length, winners, pages: state.step || 0, reason: 'stopped' };
       await chrome.storage.local.set({ history: [session, ...data.history].slice(0, 200) });
     }
@@ -485,7 +528,7 @@ function handleCardClick(event, list) {
   if (button.dataset.act === 'details') {
     const panel = card.querySelector('.details');
     panel.hidden = !panel.hidden;
-    if (!panel.hidden) panel.innerHTML = detailsHtml(product, scoreProduct(product).breakdown);
+    if (!panel.hidden) panel.innerHTML = detailsHtml(product, scoreOf(product).breakdown);
   }
   if (button.dataset.act === 'verify') {
     button.disabled = true;
@@ -494,7 +537,6 @@ function handleCardClick(event, list) {
       setStatus(response?.ok
         ? `Brand check done for "${product.title.slice(0, 40)}…"`
         : `Brand check failed: ${response?.error || 'unknown error'}`);
-      setTimeout(() => chrome.storage.local.get({ products: [] }).then(data => { products = data.products; render(); }), 300);
     });
   }
 }
@@ -503,14 +545,14 @@ function handleCardClick(event, list) {
 function exportRows(list) {
   const header = ['Title', 'URL', 'Price GBP', 'Rating', 'Reviews', 'Sold', 'Watchers', 'Brand check', 'Seller', 'Seller feedback %', 'Shipping', 'Item location', 'Competition', 'Est. profit GBP (estimate)', 'Est. margin % (estimate)', 'Opportunity score'];
   const rows = list.map(p => {
-    const profit = estimateProfit(p, settings);
+    const profit = profitOf(p);
     return [
       p.title, p.url, p.price, p.rating ?? '', p.reviews ?? '', p.soldCount ?? '', p.watchersCount ?? '',
       p.brandText || (p.branded ? 'Branded signal' : 'No brand signal'),
       p.seller ?? '', p.feedbackPercent ?? '', p.shipping ?? '', p.location ?? '',
       competitionLevel(p).level,
       profit ? profit.profit : '', profit ? profit.margin : '',
-      scoreProduct(p).score,
+      scoreOf(p).score,
     ];
   });
   return [header, ...rows];
@@ -562,7 +604,7 @@ $('resetBtn').onclick = async () => {
   const state = await readState();
   const data = await chrome.storage.local.get({ products: [], history: [] });
   if (data.products.length && !state.sessionArchived) {
-    const winners = data.products.filter(product => isWinnerProduct(product, settings)).length;
+    const winners = data.products.filter(isWinner).length;
     const session = { at: new Date().toISOString(), session: true, scanned: data.products.length, winners, pages: state.step || 0, reason: 'stopped' };
     await chrome.storage.local.set({ history: [session, ...data.history].slice(0, 200) });
   }
@@ -574,19 +616,26 @@ $('resetBtn').onclick = async () => {
   });
   await chrome.storage.local.set({ products: [] });
   products = [];
+  clearAnalysisCache();
   setStatus('Reset — previous hunt saved to History');
   render();
   renderHistory();
   pollScan();
 };
 
+let cardsTimer = null;
+function scheduleCardsRender() {
+  clearTimeout(cardsTimer);
+  cardsTimer = setTimeout(renderCards, 120);
+}
+
 $('products').onclick = event => handleCardClick(event, products);
 $('savedList').onclick = event => handleCardClick(event, saved);
-$('search').addEventListener('input', renderCards);
+$('search').addEventListener('input', scheduleCardsRender);
 $('sort').onchange = renderCards;
 $('minRatingFilter').onchange = () => { renderStats(); renderCards(); };
-$('minPrice').oninput = renderCards;
-$('maxPrice').oninput = renderCards;
+$('minPrice').oninput = scheduleCardsRender;
+$('maxPrice').oninput = scheduleCardsRender;
 $('scopeSelect').onchange = renderCards;
 
 $('csvBtn').onclick = () => triggerDownload(toCsv(exportRows(currentList())), 'ebay-hunter-products.csv', 'text/csv');
@@ -600,20 +649,45 @@ $('clearHistoryBtn').onclick = () => { chrome.storage.local.set({ history: [] })
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === name));
   document.querySelectorAll('.tabpage').forEach(page => { page.hidden = page.id !== `tab-${name}`; });
+  if (name === 'saved') renderSaved();
   if (name === 'history') renderHistory();
 }
 
 document.querySelectorAll('nav .tab').forEach(tab => { tab.onclick = () => switchTab(tab.dataset.tab); });
 
-load().then(() => pollScan());
-setInterval(() => {
-  chrome.storage.session.get({ scanState: {} }).then(({ scanState }) => { if (scanState.running) pollScan(); });
-}, 800);
-setInterval(() => {
-  chrome.storage.local.get({ products: [] }).then(({ products: fresh }) => {
-    if (fresh.length !== products.length || (fresh[0]?.lastSeen && fresh.some((p, i) => p.id !== products[i]?.id))) {
-      products = fresh;
-      render();
-    }
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    render();
   });
-}, 2000);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session') {
+    if (changes.scanState) pollScan();
+    return;
+  }
+  if (area !== 'local') return;
+  if (changes.products) {
+    products = changes.products.newValue || [];
+    scheduleRender();
+  }
+  if (changes.saved) {
+    saved = changes.saved.newValue || [];
+    renderSaved();
+  }
+  if (changes.settings) {
+    settings = { ...DEFAULT_SETTINGS, ...(changes.settings.newValue || {}) };
+    clearAnalysisCache();
+    scheduleRender();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) pollScan();
+});
+
+load().then(() => pollScan());

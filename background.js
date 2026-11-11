@@ -1,6 +1,5 @@
-import { DEFAULT_SETTINGS, isLikelyBranded } from './lib.js';
+import { DEFAULT_SETTINGS, PRODUCT_LIMIT, isLikelyBranded } from './lib.js';
 
-const MAX_PRODUCTS = 3000;
 let SCAN_TAB_ID = null;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -113,7 +112,7 @@ async function saveProduct(product) {
   const index = data.products.findIndex(item => item.id === product.id);
   if (index >= 0) data.products[index] = { ...data.products[index], ...product };
   else data.products.push(product);
-  await chrome.storage.local.set({ products: data.products.slice(-MAX_PRODUCTS) });
+  await chrome.storage.local.set({ products: data.products.slice(-PRODUCT_LIMIT) });
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
