@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>eBay Dropshipping Hunter — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>eBay Dropshipping Hunter</h1>
+    <p class="lead">Defaults used when scanning and evaluating eBay UK listings.</p>
+
+    <form id="settings">
+      <section>
+        <h2>Filtering</h2>
+        <div class="grid">
+          <label>Minimum rating (stars)
+            <input name="minRating" type="number" min="0" max="5" step="0.1">
+          </label>
+          <label>Minimum price (£)
+            <input name="minPrice" type="number" min="0" step="0.01">
+          </label>
+          <label>Maximum price (£)
+            <input name="maxPrice" type="number" min="0" step="0.01">
+          </label>
+        </div>
+        <label class="check">
+          <input name="brandFilter" type="checkbox">
+          Exclude branded products (checks titles and item specifics against the built-in brand list)
+        </label>
+        <label>Extra excluded brands (comma separated)
+          <input name="brandBlacklist" type="text" placeholder="e.g. Varo, AeroPress">
+        </label>
+      </section>
+
+      <section>
+        <h2>Profit assumptions</h2>
+        <p class="hint">The extension never invents supplier prices, fees or sales volume. Enter your own assumptions and every profit figure will be marked as an estimate based on them.</p>
+        <div class="grid">
+          <label>Assumed sourcing cost (% of eBay price)
+            <input name="costPercent" type="number" min="0" max="100" step="1">
+          </label>
+          <label>Assumed eBay + payment fees (% of price)
+            <input name="feePercent" type="number" min="0" max="60" step="0.5">
+          </label>
+          <label>Assumed shipping cost per order (£)
+            <input name="shippingCost" type="number" min="0" step="0.01">
+          </label>
+        </div>
+        <p class="formula">Profit = Price − Assumed cost − Assumed fees − Assumed shipping · Margin = Profit ÷ Price × 100</p>
+      </section>
+
+      <section>
+        <h2>Scanning</h2>
+        <div class="grid">
+          <label>Pages per keyword (default)
+            <input name="maxPages" type="number" min="1" max="20" step="1">
+          </label>
+          <label>Delay between pages (ms, respects rate limits)
+            <input name="pageDelayMs" type="number" min="1000" max="15000" step="500">
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Data</h2>
+        <button type="button" id="clearProducts" class="danger">Clear scanned products</button>
+        <button type="button" id="clearAll" class="danger">Clear everything</button>
+      </section>
+
+      <button type="submit" class="primary">Save settings</button>
+      <span id="saved" class="saved-note"></span>
+    </form>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "eBay Dropshipping Hunter",
+  "version": "2.0.0",
+  "description": "Find and filter potential generic dropshipping products on eBay UK with multi-page scanning, brand checks and profit estimates.",
+  "permissions": ["storage", "unlimitedStorage", "tabs", "scripting"],
+  "host_permissions": ["https://www.ebay.co.uk/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "eBay Dropshipping Hunter" },
+  "options_page": "options.html",
+  "content_scripts": [{
+    "matches": ["https://www.ebay.co.uk/sch/*", "https://www.ebay.co.uk/itm/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }]
+}

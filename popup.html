@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>eBay Dropshipping Hunter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="logo">EH</span><div><strong>eBay Dropshipping Hunter</strong><small>UK product research</small></div></div>
+    <button id="settingsBtn" class="icon" title="Settings">⚙</button>
+  </header>
+
+  <nav>
+    <button class="tab active" data-tab="hunter">Hunter</button>
+    <button class="tab" data-tab="saved">Saved</button>
+    <button class="tab" data-tab="history">History</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <!-- Hunter -->
+    <section id="tab-hunter" class="tabpage">
+      <div class="panel">
+        <div class="panel-title">Auto Product Hunter</div>
+        <p class="hint">No keywords needed — each hunt randomly explores a broad pool of product searches and surfaces the highest-scoring opportunities.</p>
+        <div class="row">
+          <label>Pages per keyword
+            <select id="pagesSelect">
+              <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+            </select>
+          </label>
+          <div class="scan-buttons">
+            <button id="startBtn" class="primary">Start hunt</button>
+            <button id="pauseBtn" disabled>Pause</button>
+            <button id="resumeBtn" disabled>Resume</button>
+            <button id="stopBtn" disabled>Stop</button>
+            <button id="resetBtn" title="Force-clear a stuck scan state">Reset</button>
+          </div>
+        </div>
+        <p class="hint">Each new hunt starts from zero — previous results are archived to the History tab. Keeps hunting random searches until 10 winners are found. Keep this tab open. Use Reset if the controls ever get stuck.</p>
+        <div class="progress-wrap" id="progressWrap" hidden>
+          <div class="progress"><div class="bar" id="progressBar"></div></div>
+          <div id="scanMessage" class="scan-message"></div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+      <div id="coverage" class="hint" style="margin:-6px 0 10px"></div>
+
+      <div class="toolbar">
+        <input id="search" placeholder="Search scanned products">
+        <select id="minRatingFilter">
+          <option value="4.5">★ 4.5+</option>
+          <option value="4">★ 4.0+</option>
+          <option value="3.5">★ 3.5+</option>
+          <option value="0">Any rating</option>
+        </select>
+        <select id="sort">
+          <option value="score">Best opportunity</option>
+          <option value="rating">Highest rating</option>
+          <option value="price">Lowest price</option>
+          <option value="profit">Highest est. profit</option>
+          <option value="margin">Highest est. margin</option>
+          <option value="reviews">Most reviews</option>
+          <option value="sold">Most sold</option>
+          <option value="unread">Unbranded first</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <input id="minPrice" type="number" min="0" step="1" placeholder="Min £">
+        <input id="maxPrice" type="number" min="0" step="1" placeholder="Max £">
+        <select id="scopeSelect">
+          <option value="winners" selected>Winners only</option>
+          <option value="matching">Matching only</option>
+          <option value="all">All scanned</option>
+          <option value="unbranded">Unbranded only</option>
+        </select>
+        <button id="csvBtn">CSV</button>
+        <button id="xlsBtn">Excel</button>
+      </div>
+
+      <div id="products" class="cards"></div>
+    </section>
+
+    <!-- Saved -->
+    <section id="tab-saved" class="tabpage" hidden>
+      <div class="toolbar">
+        <span class="hint">Favourite products</span>
+        <button id="savedCsvBtn">CSV</button>
+        <button id="savedXlsBtn">Excel</button>
+        <button id="clearSavedBtn" class="danger">Clear saved</button>
+      </div>
+      <div id="savedList" class="cards"></div>
+    </section>
+
+    <!-- History -->
+    <section id="tab-history" class="tabpage" hidden>
+      <div class="toolbar">
+        <span class="hint">Scan history</span>
+        <button id="clearHistoryBtn" class="danger">Clear history</button>
+      </div>
+      <div id="historyList" class="table-wrap"><div class="empty">No scans yet.</div></div>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="tabpage" hidden>
+      <div class="panel">
+        <div class="panel-title">Settings</div>
+        <p class="hint">Filters, profit assumptions and scan behaviour live on the settings page.</p>
+        <p class="hint">Profit figures are always estimates based on your own assumptions (sourcing cost %, eBay fees %, shipping). The extension never fabricates supplier prices, sales volume or demand data.</p>
+        <button id="openOptions" class="primary">Open settings page</button>
+      </div>
+    </section>
+  </main>
+
+  <footer><span id="status">Ready</span></footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
