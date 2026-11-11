@@ -3,13 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>eBay Dropshipping Hunter</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
-    <div class="brand"><span class="logo">EH</span><div><strong>eBay Dropshipping Hunter</strong><small>UK product research</small></div></div>
-    <button id="settingsBtn" class="icon" title="Settings">⚙</button>
+    <div class="brand">
+      <span class="logo" aria-hidden="true">EH</span>
+      <div>
+        <strong>eBay Dropshipping Hunter</strong>
+        <small>UK product research</small>
+      </div>
+    </div>
+    <button id="settingsBtn" class="icon" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
   </header>
 
   <nav>
@@ -20,11 +32,15 @@
   </nav>
 
   <main>
-    <!-- Hunter -->
     <section id="tab-hunter" class="tabpage">
-      <div class="panel">
-        <div class="panel-title">Auto Product Hunter</div>
-        <p class="hint">No keywords needed — each hunt randomly explores a broad pool of product searches and surfaces the highest-scoring opportunities.</p>
+      <div class="panel hunt-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Auto Product Hunter</div>
+            <p class="hint">No keywords needed — each hunt explores a broad pool of random product searches and surfaces the highest-scoring opportunities.</p>
+          </div>
+          <span class="hunt-badge">Random search</span>
+        </div>
         <div class="row">
           <label>Pages per keyword
             <select id="pagesSelect">
@@ -39,7 +55,7 @@
             <button id="resetBtn" title="Force-clear a stuck scan state">Reset</button>
           </div>
         </div>
-        <p class="hint">Each new hunt starts from zero — previous results are archived to the History tab. Keeps hunting random searches until 10 winners are found. Keep this tab open. Use Reset if the controls ever get stuck.</p>
+        <p class="hint" style="margin-top:12px">Each new hunt starts from zero — previous results are archived to the History tab. Keeps hunting random searches until 10 winners are found. Keep this tab open. Use Reset if the controls ever get stuck.</p>
         <div class="progress-wrap" id="progressWrap" hidden>
           <div class="progress"><div class="bar" id="progressBar"></div></div>
           <div id="scanMessage" class="scan-message"></div>
@@ -47,17 +63,23 @@
       </div>
 
       <div class="stats" id="stats"></div>
-      <div id="coverage" class="hint" style="margin:-6px 0 10px"></div>
+      <div id="coverage" class="hint coverage"></div>
 
       <div class="toolbar">
-        <input id="search" placeholder="Search scanned products">
-        <select id="minRatingFilter">
+        <div class="search-field">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="M20 20l-3.5-3.5"></path>
+          </svg>
+          <input id="search" placeholder="Search scanned products" aria-label="Search scanned products">
+        </div>
+        <select id="minRatingFilter" aria-label="Minimum rating">
           <option value="4.5">★ 4.5+</option>
           <option value="4">★ 4.0+</option>
           <option value="3.5">★ 3.5+</option>
           <option value="0">Any rating</option>
         </select>
-        <select id="sort">
+        <select id="sort" aria-label="Sort by">
           <option value="score">Best opportunity</option>
           <option value="rating">Highest rating</option>
           <option value="price">Lowest price</option>
@@ -69,33 +91,32 @@
         </select>
       </div>
       <div class="toolbar">
-        <input id="minPrice" type="number" min="0" step="1" placeholder="Min £">
-        <input id="maxPrice" type="number" min="0" step="1" placeholder="Max £">
-        <select id="scopeSelect">
+        <input id="minPrice" type="number" min="0" step="1" placeholder="Min £" aria-label="Minimum price">
+        <input id="maxPrice" type="number" min="0" step="1" placeholder="Max £" aria-label="Maximum price">
+        <select id="scopeSelect" aria-label="Result scope">
           <option value="winners" selected>Winners only</option>
           <option value="matching">Matching only</option>
           <option value="all">All scanned</option>
           <option value="unbranded">Unbranded only</option>
         </select>
-        <button id="csvBtn">CSV</button>
-        <button id="xlsBtn">Excel</button>
+        <span class="toolbar-spacer"></span>
+        <button id="csvBtn">Export CSV</button>
+        <button id="xlsBtn">Export Excel</button>
       </div>
 
       <div id="products" class="cards"></div>
     </section>
 
-    <!-- Saved -->
     <section id="tab-saved" class="tabpage" hidden>
       <div class="toolbar">
         <span class="hint">Favourite products</span>
-        <button id="savedCsvBtn">CSV</button>
-        <button id="savedXlsBtn">Excel</button>
+        <button id="savedCsvBtn">Export CSV</button>
+        <button id="savedXlsBtn">Export Excel</button>
         <button id="clearSavedBtn" class="danger">Clear saved</button>
       </div>
       <div id="savedList" class="cards"></div>
     </section>
 
-    <!-- History -->
     <section id="tab-history" class="tabpage" hidden>
       <div class="toolbar">
         <span class="hint">Scan history</span>
@@ -104,18 +125,17 @@
       <div id="historyList" class="table-wrap"><div class="empty">No scans yet.</div></div>
     </section>
 
-    <!-- Settings -->
     <section id="tab-settings" class="tabpage" hidden>
       <div class="panel">
         <div class="panel-title">Settings</div>
-        <p class="hint">Filters, profit assumptions and scan behaviour live on the settings page.</p>
-        <p class="hint">Profit figures are always estimates based on your own assumptions (sourcing cost %, eBay fees %, shipping). The extension never fabricates supplier prices, sales volume or demand data.</p>
+        <p class="hint" style="margin-bottom:10px">Filters, profit assumptions and scan behaviour live on the settings page.</p>
+        <p class="hint" style="margin-bottom:14px">Profit figures are always estimates based on your own assumptions (sourcing cost %, eBay fees %, shipping). The extension never fabricates supplier prices, sales volume or demand data.</p>
         <button id="openOptions" class="primary">Open settings page</button>
       </div>
     </section>
   </main>
 
-  <footer><span id="status">Ready</span></footer>
+  <footer><span class="status-dot" aria-hidden="true"></span><span id="status">Ready</span></footer>
 
   <script type="module" src="popup.js"></script>
 </body>

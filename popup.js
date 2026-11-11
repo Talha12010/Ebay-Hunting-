@@ -87,6 +87,7 @@ function renderStats() {
   const avgRating = rated.length ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : '—';
   const withProfit = winners.map(p => estimateProfit(p, settings)).filter(Boolean);
   const avgProfit = withProfit.length ? (withProfit.reduce((s, e) => s + e.profit, 0) / withProfit.length).toFixed(2) : '—';
+  const avgProfitText = avgProfit === '—' ? '—' : `£${avgProfit}`;
   const best = [...winners].sort((a, b) => scoreProduct(b).score - scoreProduct(a).score)[0];
   $('stats').innerHTML = `
     <div><b>${products.length}</b><span>Scanned</span></div>
@@ -94,7 +95,7 @@ function renderStats() {
     <div><b>${unbranded.length}</b><span>Unbranded</span></div>
     <div><b>${rated.length ? avgRating + '★' : '—'}</b><span>Avg rating</span></div>
     <div><b title="${escapeHtml(best?.title || '')}">${best ? scoreProduct(best).score : '—'}</b><span>Best winner</span></div>
-    <div><b>£${avgProfit}</b><span>Avg est. profit</span></div>`;
+    <div><b>${avgProfitText}</b><span>Avg est. profit</span></div>`;
 
   const pct = n => products.length ? `${Math.round((n / products.length) * 100)}%` : '—';
   const withReviews = products.filter(p => p.reviews != null).length;
@@ -115,9 +116,13 @@ function cardHtml(product) {
   const brandState = product.brandText
     ? `<span class="badge ${product.branded ? 'bad' : 'good'}">Brand (verified): ${escapeHtml(product.brandText)}</span>`
     : `<span class="badge ${product.branded ? 'bad' : 'good'}">${product.branded ? 'Brand signal in title' : 'Likely unbranded'}</span>`;
+  const ring = itemScore >= 70 ? '#34d399' : itemScore >= 45 ? '#fbbf24' : '#f87171';
+  const thumb = product.image
+    ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy">`
+    : `<div class="thumb-fallback" aria-hidden="true">${escapeHtml((product.title || '?').trim().charAt(0).toUpperCase() || '?')}</div>`;
   return `
   <article class="product" data-id="${escapeHtml(product.id)}">
-    <img src="${escapeHtml(product.image)}" alt="" loading="lazy">
+    ${thumb}
     <div>
       <h3>${escapeHtml(product.title)}</h3>
       <div class="meta-line">£${product.price.toFixed(2)} · ${product.rating ? `${product.rating}★ (${product.reviews ?? 'no review count'})` : 'No rating on page'}</div>
@@ -140,7 +145,7 @@ function cardHtml(product) {
       </div>
       <div class="details" hidden></div>
     </div>
-    <div class="score"><b>${itemScore}</b><small>score / 100</small></div>
+    <div class="score" style="--score:${itemScore};--ring:${ring}"><b>${itemScore}</b><small>score</small></div>
   </article>`;
 }
 
@@ -416,6 +421,8 @@ async function runScan(pagesPerKeyword) {
 async function pollScan() {
   const scanState = await readState();
   const running = !!scanState.running;
+  document.body.classList.toggle('is-running', running && !scanState.paused);
+  document.body.classList.toggle('is-paused', running && !!scanState.paused);
   $('startBtn').disabled = running;
   $('pauseBtn').disabled = !running || scanState.paused;
   $('resumeBtn').disabled = !running || !scanState.paused;
