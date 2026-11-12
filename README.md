@@ -11,7 +11,7 @@ A Manifest V3 Chrome extension for researching potential dropshipping products o
 
 ## What it does
 
-- **Multi-page scanning** — scans several search-result pages per keyword in a hidden background tab (1–20 pages per keyword, configurable), with **Start / Pause / Resume / Stop** controls and a live progress bar.
+- **Multi-page scanning** — scans several search-result pages per keyword in a hidden background tab (1–20 pages per keyword, configurable), with **Start / Pause / Resume / Stop** controls and a live progress bar. Only generic, unbranded listings that pass the dropshipping winner checks are stored — branded and non-viable products are discarded during the scan.
 - **Smart product discovery** — enter custom keywords and/or tick category chips (Home & Kitchen, Garden & Outdoor, Pet Supplies, Car Accessories, Phone Accessories, Beauty Accessories, Sports & Fitness, DIY & Tools, Storage & Organisation, Office, Travel).
 - **Filtering** — minimum star rating (default 4.5, only listings with visible rating data pass), price range in GBP, and brand exclusion: a built-in list of well-known manufacturer/trademark brands (including **Varo**) plus your own blacklist, matched with word boundaries against titles and verified item-specific brand values so ordinary descriptive words are not mistaken for brands.
 - **Brand verification** — a per-product *Verify brand* action loads the actual item page and reads the real `Brand:` value from the item specifics instead of guessing.

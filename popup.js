@@ -11,6 +11,7 @@ let settings = { ...DEFAULT_SETTINGS };
 let scoreCache = new WeakMap();
 let profitCache = new WeakMap();
 let winnerCache = new WeakMap();
+let scannedTotal = 0;
 
 function clearAnalysisCache() {
   scoreCache = new WeakMap();
@@ -54,6 +55,8 @@ async function load() {
     await chrome.storage.local.set({ products: [] });
   }
   products = [];
+  scannedTotal = 0;
+  await setState({ scannedTotal: 0 });
   $('minRatingFilter').value = String(settings.minRating);
   $('minPrice').value = settings.minPrice || '';
   $('maxPrice').value = settings.maxPrice || '';
@@ -115,7 +118,8 @@ function renderStats() {
     if (score > bestScore) { bestScore = score; best = product; }
   }
   $('stats').innerHTML = `
-    <div><b>${products.length}</b><span>Scanned</span></div>
+    <div><b>${scannedTotal}</b><span>Scanned</span></div>
+    <div><b>${products.length}</b><span>Dropshippers</span></div>
     <div><b>${winners.length}</b><span>Winners</span></div>
     <div><b>${unbranded.length}</b><span>Unbranded</span></div>
     <div><b>${rated.length ? avgRating + '★' : '—'}</b><span>Avg rating</span></div>
@@ -343,10 +347,10 @@ async function finishScan(reason, pagesScanned, winners, historyItems) {
     await chrome.storage.local.set({ history: [...rows, ...historyItems, ...data.history].slice(0, 200) });
   }
   const message = reason === 'stopped'
-    ? `Stopped after ${pagesScanned} pages — ${winners} winner${winners === 1 ? '' : 's'} found`
+    ? `Stopped after ${pagesScanned} pages — ${scannedTotal} listings scanned, ${winners} winner${winners === 1 ? '' : 's'} found`
     : reason === 'target'
-      ? `Done: ${winners} winners found after ${pagesScanned} pages`
-      : `Safety stop after ${pagesScanned} pages — ${winners} winner${winners === 1 ? '' : 's'} found. Press Start to keep hunting.`;
+      ? `Done: ${scannedTotal} listings scanned, ${winners} winners found after ${pagesScanned} pages`
+      : `Safety stop after ${pagesScanned} pages — ${scannedTotal} listings scanned, ${winners} winner${winners === 1 ? '' : 's'} found. Press Start to keep hunting.`;
   await setState({
     running: false,
     paused: false,
@@ -365,6 +369,7 @@ const SAFETY_MAX_PAGES = 150;
 
 async function runScan(pagesPerKeyword) {
   scanTabId = null;
+  scannedTotal = 0;
   const pages = Math.min(Math.max(1, pagesPerKeyword), 20);
   const historyItems = [];
   let pagesScanned = 0;
@@ -374,7 +379,7 @@ async function runScan(pagesPerKeyword) {
 
   await setState({
     running: true, paused: false, stopped: false, stages: [], totalSteps: 0, step: 0,
-    goalWinners: TARGET_WINNERS, winnersFound: 0, sessionArchived: false, gen,
+    goalWinners: TARGET_WINNERS, winnersFound: 0, sessionArchived: false, gen, scannedTotal: 0,
     startedAt: new Date().toISOString(), finishedAt: null, message: 'Hunting for winners…',
   });
 
@@ -431,20 +436,23 @@ async function runScan(pagesPerKeyword) {
         if (after.gen !== gen) return;
         if (after.stopped || !after.running) return finishScan('stopped', pagesScanned, winners, historyItems);
 
-        const fresh = (response.products || []).map(product => ({
+        const scanned = (response.products || []).map(product => ({
           ...product,
           branded: isLikelyBranded(product, settings),
           sourceKeyword: keyword,
         }));
+        scannedTotal += scanned.length;
+        const fresh = scanned.filter(product => isWinnerProduct(product, settings));
         const { added, merged } = await mergeProducts(fresh);
-        historyItems.push({ at: new Date().toISOString(), keyword, page, url: pageUrl, found: fresh.length, added });
+        historyItems.push({ at: new Date().toISOString(), keyword, page, url: pageUrl, found: scanned.length, dropshippers: fresh.length, added });
         pagesScanned += 1;
         winners = merged.filter(product => isWinnerProduct(product, settings)).length;
 
         await setState({
           step: pagesScanned,
+          scannedTotal,
           winnersFound: winners,
-          message: `Winners ${winners}/${TARGET_WINNERS} · ${added} new from "${keyword}" page ${page} (${pagesScanned} pages scanned)`,
+          message: `Scanned ${scannedTotal} · Winners ${winners}/${TARGET_WINNERS} · ${added} new dropshipper${added === 1 ? '' : 's'} from "${keyword}" page ${page} (${pagesScanned} pages scanned)`,
         });
 
         if (winners >= TARGET_WINNERS) return finishScan('target', pagesScanned, winners, historyItems);
@@ -461,6 +469,7 @@ async function runScan(pagesPerKeyword) {
 
 async function pollScan() {
   const scanState = await readState();
+  scannedTotal = Number(scanState.scannedTotal) || 0;
   const running = !!scanState.running;
   document.body.classList.toggle('is-running', running && !scanState.paused);
   document.body.classList.toggle('is-paused', running && !!scanState.paused);
@@ -476,6 +485,7 @@ async function pollScan() {
   $('scanMessage').textContent = scanState.message || '';
   if (running) $('status').textContent = scanState.message || 'Hunting…';
   else $('status').textContent = scanState.message || 'Ready';
+  renderStats();
 }
 
 async function startScan() {
@@ -495,7 +505,7 @@ async function startScan() {
     await chrome.storage.local.set({ products: [] });
     products = [];
   }
-  setStatus('New hunt started — previous results archived to History. Hunting until 10 winners are found…');
+  setStatus('New hunt started — previous results archived to History. Only dropshipper products are stored; hunting until 10 winners are found…');
   $('scopeSelect').value = 'winners';
   $('sort').value = 'score';
   render();
@@ -582,7 +592,7 @@ function renderHistory() {
         <div class="history-row">
           <div>
             <div><strong>${escapeHtml(item.keyword)}</strong> page ${item.page}</div>
-            <div class="when">${new Date(item.at).toLocaleString()} · ${item.found} listings · +${item.added} new</div>
+            <div class="when">${new Date(item.at).toLocaleString()} · ${item.found} listings · ${item.dropshippers ?? 0} dropshippers · +${item.added} new</div>
           </div>
           <div class="when">${escapeHtml(item.url)}</div>
         </div>`).join('')
