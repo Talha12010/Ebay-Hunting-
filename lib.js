@@ -32,6 +32,17 @@ export const KNOWN_BRANDS = [
 
 const UNBRAND_WORDS = ['unbranded', 'no brand', 'nobrand', 'generic'];
 
+// Item-location helpers. Scans are restricted to UK-located listings: the search
+// URL applies eBay's UK Only filter, and this check catches items eBay still
+// returns from abroad. Returns null when the page shows no location at all.
+const UK_LOCATION_PATTERN = /\b(?:united kingdom|great britain|uk|gb|england|scotland|wales|northern ireland)\b/i;
+
+export function isUkLocation(location) {
+  const value = String(location || '').trim();
+  if (!value) return null;
+  return UK_LOCATION_PATTERN.test(value);
+}
+
 let brandPatternCache = { key: null, pattern: null };
 
 function brandPattern(settings) {

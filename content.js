@@ -26,6 +26,25 @@ function cardFromLink(link) {
   return link.closest('li, article, [class*="card" i], [data-testid*="card" i], div[class*="item" i]') || link.parentElement?.parentElement || link.parentElement;
 }
 
+// eBay shows the item location either as ".s-item__location" (legacy) or as an
+// attribute row such as "Located in Canada" / "From United Kingdom" (s-card).
+// Shipping rows ("+£2.99 delivery") are ignored.
+const LOCATION_SELECTORS = [
+  '.s-item__location', '.s-card__attribute-row', '.s-card__footer--row', '[data-testid*="location" i]',
+];
+
+function parseLocation(card, cardText) {
+  for (const selector of LOCATION_SELECTORS) {
+    for (const row of card.querySelectorAll(selector)) {
+      const value = row.textContent.replace(/\s+/g, ' ').trim();
+      const match = value.match(/^(?:located in|from)\s*:?\s*(.+)$/i);
+      if (match && !/(?:postage|delivery|shipping|£)/i.test(match[1])) return match[1].trim();
+    }
+  }
+  const fallback = String(cardText || '').match(/(?:Located in|located in|From|from)\s*:?\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3})/);
+  return fallback ? fallback[1].trim() : '';
+}
+
 function parseFromText(cardPriceNode, link, cardText) {
   const t = cardText || '';
   const priceMatch = t.match(/£\s*([\d,]+(?:\.\d{1,2})?)/);
@@ -45,6 +64,7 @@ function parseFromText(cardPriceNode, link, cardText) {
     watchersCount: watchMatch ? parseCount(watchMatch[0]) : null,
     image,
     shipping,
+    location: parseLocation(cardPriceNode, t),
   };
 }
 
@@ -100,7 +120,7 @@ function extractListings() {
     const sellerInfo = text(card, ['.s-item__seller-info-text', '.s-card__attribute-row']);
     const seller = (sellerInfo.match(/^([^\s(]+)\s*\(/) || [])[1] || sellerInfo.split(' ')[0] || '';
     const feedbackPercent = (sellerInfo.match(/([\d.]+)%\s*(?:positive|feedback)/i) || [])[1] || null;
-    const location = (text(card, ['.s-item__location']).match(/from\s+(.+)$/i) || [])[1] || '';
+    const location = parseLocation(card, cardText);
     const subtitle = text(card, ['.s-item__subtitle', '.SECONDARY_INFO']);
     const badges = [...card.querySelectorAll('.s-item__top-rated-text, .s-item__itemSpecifics li, .s-item__badges span')]
       .map(node => node.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 6);

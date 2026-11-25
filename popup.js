@@ -1,5 +1,5 @@
 import {
-  DEFAULT_SETTINGS, PRODUCT_LIMIT, randomKeywords, isWinnerProduct, winnerFailures, estimateProfit, isLikelyBranded, competitionLevel, scoreProduct, toCsv, toExcelXml, triggerDownload,
+  DEFAULT_SETTINGS, PRODUCT_LIMIT, randomKeywords, isWinnerProduct, winnerFailures, estimateProfit, isLikelyBranded, isUkLocation, competitionLevel, scoreProduct, toCsv, toExcelXml, triggerDownload,
 } from './lib.js';
 
 const $ = id => document.getElementById(id);
@@ -262,9 +262,9 @@ function buildSearchUrl(keyword, page) {
     _nkw: keyword,
     _ipg: '60',
     _pgn: String(page),
-    LH_PrefLoc: '1',      // UK preference
-    LH_LocatedIn: '1',    // item location filter
-    _salic: '3',          // United Kingdom (eBay site 3)
+    LH_PrefLoc: '1',      // item location: UK only
+    LH_LocatedIn: '1',    // restrict by item location
+    _salic: '3',          // located in: United Kingdom
   });
   return `https://www.ebay.co.uk/sch/i.html?${params.toString()}`;
 }
@@ -441,10 +441,14 @@ async function runScan(pagesPerKeyword) {
           branded: isLikelyBranded(product, settings),
           sourceKeyword: keyword,
         }));
+        // UK-only: eBay still lets international listings through the UK Only
+        // filter, so drop any card whose location is clearly outside the UK.
+        const ukListings = scanned.filter(product => isUkLocation(product.location) !== false);
+        const skippedNonUk = scanned.length - ukListings.length;
         scannedTotal += scanned.length;
-        const fresh = scanned.filter(product => isWinnerProduct(product, settings));
+        const fresh = ukListings.filter(product => isWinnerProduct(product, settings));
         const { added, merged } = await mergeProducts(fresh);
-        historyItems.push({ at: new Date().toISOString(), keyword, page, url: pageUrl, found: scanned.length, dropshippers: fresh.length, added });
+        historyItems.push({ at: new Date().toISOString(), keyword, page, url: pageUrl, found: scanned.length, dropshippers: fresh.length, added, skippedNonUk });
         pagesScanned += 1;
         winners = merged.filter(product => isWinnerProduct(product, settings)).length;
 
@@ -452,7 +456,7 @@ async function runScan(pagesPerKeyword) {
           step: pagesScanned,
           scannedTotal,
           winnersFound: winners,
-          message: `Scanned ${scannedTotal} · Winners ${winners}/${TARGET_WINNERS} · ${added} new dropshipper${added === 1 ? '' : 's'} from "${keyword}" page ${page} (${pagesScanned} pages scanned)`,
+          message: `Scanned ${scannedTotal} · Winners ${winners}/${TARGET_WINNERS} · ${added} new dropshipper${added === 1 ? '' : 's'} from "${keyword}" page ${page} (${pagesScanned} pages scanned)${skippedNonUk ? ` · skipped ${skippedNonUk} non-UK` : ''}`,
         });
 
         if (winners >= TARGET_WINNERS) return finishScan('target', pagesScanned, winners, historyItems);
@@ -592,7 +596,7 @@ function renderHistory() {
         <div class="history-row">
           <div>
             <div><strong>${escapeHtml(item.keyword)}</strong> page ${item.page}</div>
-            <div class="when">${new Date(item.at).toLocaleString()} · ${item.found} listings · ${item.dropshippers ?? 0} dropshippers · +${item.added} new</div>
+            <div class="when">${new Date(item.at).toLocaleString()} · ${item.found} listings · ${item.dropshippers ?? 0} dropshippers · +${item.added} new${item.skippedNonUk ? ` · ${item.skippedNonUk} non-UK skipped` : ''}</div>
           </div>
           <div class="when">${escapeHtml(item.url)}</div>
         </div>`).join('')
